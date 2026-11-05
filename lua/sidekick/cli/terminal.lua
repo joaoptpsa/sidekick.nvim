@@ -454,9 +454,6 @@ function M:close()
   self.closed = true
 
   M.terminals[self.id] = nil
-  if vim.tbl_isempty(M.terminals) then
-    require("sidekick.cli.watch").disable()
-  end
   Session.detach(self)
   if self.timer and not self.timer:is_closing() then
     self.timer:close()

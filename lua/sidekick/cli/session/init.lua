@@ -167,6 +167,9 @@ function M.detach(session)
       Util.emit("SidekickCliDetach", { id = session.id })
     end)
   end
+  if vim.tbl_isempty(M._attached) then
+    require("sidekick.cli.watch").disable()
+  end
   return session
 end
 
@@ -195,6 +198,10 @@ function M.attach(session)
     session:start()
   end
   M._attached[session.id] = session
+  -- sessions in a multiplexer window or split edit files too, not only embedded terminals
+  if Config.cli.watch then
+    require("sidekick.cli.watch").enable()
+  end
   Util.emit("SidekickCliAttach", { id = session.id })
   return session
 end
