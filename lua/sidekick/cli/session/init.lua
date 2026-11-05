@@ -52,6 +52,12 @@ function B:attach() end
 --- Detach from an existing session
 function B:detach() end
 
+--- Reveal a session that runs outside a Neovim terminal (optional hook)
+---@return boolean focused
+function B:focus()
+  return false
+end
+
 --- Start a new session
 --- If the backend returns a Cmd, a new terminal session will be spawned
 ---@return sidekick.cli.terminal.Cmd?

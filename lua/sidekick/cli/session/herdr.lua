@@ -404,6 +404,21 @@ function M:pane_id()
   return pane and pane.id
 end
 
+--- Focus the Herdr pane running this session.
+---@return boolean focused
+function M:focus()
+  local pane = self:pane()
+  if not pane then
+    return false
+  end
+  -- Focus the pane itself, since agents sharing a tab as splits would otherwise
+  -- land on whichever pane that tab last had active.
+  if Util.exec(self:herdr({ "agent", "focus", pane.id }), { notify = false }) then
+    return true
+  end
+  return pane.tab_id ~= nil and Util.exec(self:herdr({ "tab", "focus", pane.tab_id }), { notify = false }) ~= nil
+end
+
 ---Send text to a Herdr pane
 function M:send(text)
   local pane_id = self:pane_id()
