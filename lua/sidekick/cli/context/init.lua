@@ -202,11 +202,13 @@ function M.ctx()
   local win = wins[1] or vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_win_get_buf(win)
   local cursor = vim.api.nvim_win_get_cursor(win)
+  -- the window may be in another tabpage, which `getcwd(win)` alone can't resolve
+  local tabnr = vim.api.nvim_tabpage_get_number(vim.api.nvim_win_get_tabpage(win))
   ---@type sidekick.context.ctx
   return {
     win = win,
     buf = buf,
-    cwd = vim.fs.normalize(vim.fn.getcwd(win)),
+    cwd = vim.fs.normalize(vim.fn.getcwd(win, tabnr)),
     row = cursor[1],
     col = cursor[2] + 1,
     range = M.selection(buf),
