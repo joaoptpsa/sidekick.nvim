@@ -14,7 +14,7 @@ function M.env(pid)
   local env = {} ---@type table<string, string>
 
   if have_proc then
-    -- Linux: use /proc filesystem
+    -- Linux: use /proc filesystem; a process that already exited has no entry
     local e = io.open("/proc/" .. pid .. "/environ", "r")
     if e then
       local env_data = e:read("*all")
@@ -27,23 +27,21 @@ function M.env(pid)
         end
       end
     end
+    return env
   end
 
   if not have_ps then
     return
   end
 
-  -- try ps as a fallback (macOS and others)
-  local lines = Util.exec({ "ps", "eww", "-p", tostring(pid) })
-  if lines and #lines > 0 then
-    -- ps eww output format: PID command ENV1=val1 ENV2=val2 ...
-    local line = lines[1]
-    -- Skip the PID and command, extract environment variables
-    for env_var in line:gmatch("(%w+=[^%s]+)") do
-      local k, v = env_var:match("^(.-)=(.*)$")
-      if k and v then
-        env[k] = v
-      end
+  -- try ps as a fallback (macOS and others); it fails for a process that already exited
+  local lines = Util.exec({ "ps", "eww", "-p", tostring(pid) }, { notify = false })
+  if lines and #lines > 1 then
+    -- ps eww output format: a header line, then PID command ENV1=val1 ENV2=val2 ...
+    local line = lines[2]
+    -- Skip the PID and command, extract environment variables that start a word
+    for k, v in line:gmatch("%f[%S]([%a_][%w_]*)=(%S*)") do
+      env[k] = v
     end
   end
   return env
