@@ -82,9 +82,12 @@ local defaults = {
       nav = nil,
     },
     ---@class sidekick.cli.Mux
-    ---@field backend? "tmux"|"zellij"|"herdr" Multiplexer backend to persist CLI sessions
+    ---@field backend? "tmux"|"zellij"|"herdr"|"hc" Multiplexer backend to persist CLI sessions
     mux = {
-      backend = vim.env.HERDR_ENV == "1" and "herdr" or vim.env.ZELLIJ and "zellij" or "tmux", -- default to tmux unless herdr/zellij is detected
+      backend = (vim.env.HC_TERMINAL_ID and vim.env.HC_TERMINAL_ID ~= "") and "hc"
+        or vim.env.HERDR_ENV == "1" and "herdr"
+        or vim.env.ZELLIJ and "zellij"
+        or "tmux", -- default to tmux unless hc/herdr/zellij is detected
       enabled = false,
       -- terminal: new sessions will be created for each CLI tool and shown in a Neovim terminal
       -- window: when run inside a terminal multiplexer, new sessions will be created in a new tab
@@ -223,7 +226,7 @@ function M.setup(opts)
     require("sidekick.status").setup()
 
     M.validate("cli.win.layout", { "float", "left", "bottom", "top", "right" })
-    M.validate("cli.mux.backend", { "tmux", "zellij", "herdr" })
+    M.validate("cli.mux.backend", { "tmux", "zellij", "herdr", "hc" })
     M.validate("cli.mux.create", { "terminal", "window", "split" })
     M.validate("nes.diff.show", { "always", "cursor" })
   end)

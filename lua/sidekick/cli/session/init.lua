@@ -128,6 +128,7 @@ function M.setup()
   M.did_setup = true
   Config.tools() -- load tools, since they may register session backends
   local session_backends = {
+    hc = "sidekick.cli.session.hc",
     herdr = "sidekick.cli.session.herdr",
     tmux = "sidekick.cli.session.tmux",
     zellij = "sidekick.cli.session.zellij",
