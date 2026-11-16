@@ -7,6 +7,9 @@ local Util = require("sidekick.util")
 local M = {}
 M.__index = M
 
+--- Milliseconds to wait for a paste to show on the terminal's screen.
+M.PASTE_TIMEOUT = 1000
+
 local function non_empty_string(value)
   return type(value) == "string" and value ~= ""
 end
@@ -315,12 +318,25 @@ local function set_clipboard(text)
   return ret.code == 0
 end
 
+--- The terminal's screen as text, without history.
+---@return string?
+function M:screen()
+  local ret = vim.system({ "hc", "read", self.hc_terminal_id }, { text = true }):wait()
+  if ret.code ~= 0 then
+    return nil
+  end
+  return ret.stdout
+end
+
 --- Put text in the agent's prompt without submitting it.
 --- `hc send` always presses Enter and herdr-core has no paste-only call, so this
 --- goes through the clipboard and herdr-app's paste into the focused terminal.
 --- The text clipboard is restored afterwards; a non-text one is cleared.
+--- `terminal.paste` reports success even when herdr-app could not read the
+--- clipboard (Wayland only lets the focused window read it), so the paste counts
+--- only once the terminal's screen changes.
 ---@param text string
----@return boolean
+---@return boolean ok, string? err
 function M:paste(text)
   local saved = vim.system({ "wl-paste", "--no-newline", "--type", "text/plain" }, { text = true }):wait()
   local function restore()
@@ -333,15 +349,25 @@ function M:paste(text)
 
   if not set_clipboard(text) then
     restore()
-    return false
+    return false, "`wl-copy` failed"
   end
   if not M.app_do("agent.focus", { terminal = self.hc_terminal_id }, { notify = false }) then
     restore()
-    return false
+    return false, "`herdr-app` could not focus it"
   end
+  local before = self:screen()
   local pasted = M.app_do("terminal.paste", vim.empty_dict(), { notify = false }) ~= nil
   restore()
-  return pasted
+  if not pasted then
+    return false, "`herdr-app` could not paste"
+  end
+  local changed = vim.wait(M.PASTE_TIMEOUT, function()
+    return self:screen() ~= before
+  end, 50)
+  if not changed then
+    return false, "nothing arrived; herdr-app can only read the clipboard while its window is focused"
+  end
+  return true
 end
 
 --- Put text in the herdr-core terminal's prompt; `submit` presses Enter.
@@ -358,8 +384,9 @@ function M:send(text)
     Util.error("Sending to herdr-core needs `herdr-app`, `wl-copy` and `wl-paste` on Wayland")
     return
   end
-  if not self:paste(clean) then
-    Util.error(("Could not paste into herdr-core terminal `%s`"):format(self.hc_terminal_id))
+  local ok, err = self:paste(clean)
+  if not ok then
+    Util.error(("Could not paste into herdr-core terminal `%s`: %s"):format(self.hc_terminal_id, err))
   end
 end
 
