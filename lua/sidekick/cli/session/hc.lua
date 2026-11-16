@@ -299,7 +299,52 @@ function M:focus()
   return M.app_do("agent.focus", { terminal = self.hc_terminal_id }, { notify = false }) ~= nil
 end
 
---- Send text to the herdr-core terminal.
+--- Whether text can be pasted through herdr-app and the Wayland clipboard.
+---@return boolean
+function M.can_paste()
+  return vim.env.WAYLAND_DISPLAY ~= nil
+    and vim.fn.executable("wl-copy") == 1
+    and vim.fn.executable("wl-paste") == 1
+    and vim.fn.executable("herdr-app") == 1
+end
+
+---@param text string
+---@return boolean
+local function set_clipboard(text)
+  local ret = vim.system({ "wl-copy", "--type", "text/plain" }, { stdin = text, stdout = false, stderr = false }):wait()
+  return ret.code == 0
+end
+
+--- Put text in the agent's prompt without submitting it.
+--- `hc send` always presses Enter and herdr-core has no paste-only call, so this
+--- goes through the clipboard and herdr-app's paste into the focused terminal.
+--- The text clipboard is restored afterwards; a non-text one is cleared.
+---@param text string
+---@return boolean
+function M:paste(text)
+  local saved = vim.system({ "wl-paste", "--no-newline", "--type", "text/plain" }, { text = true }):wait()
+  local function restore()
+    if saved.code == 0 then
+      set_clipboard(saved.stdout or "")
+      return
+    end
+    vim.system({ "wl-copy", "--clear" }, { stdout = false, stderr = false }):wait()
+  end
+
+  if not set_clipboard(text) then
+    restore()
+    return false
+  end
+  if not M.app_do("agent.focus", { terminal = self.hc_terminal_id }, { notify = false }) then
+    restore()
+    return false
+  end
+  local pasted = M.app_do("terminal.paste", vim.empty_dict(), { notify = false }) ~= nil
+  restore()
+  return pasted
+end
+
+--- Put text in the herdr-core terminal's prompt; `submit` presses Enter.
 ---@param text string
 function M:send(text)
   if not self.hc_terminal_id then
@@ -307,14 +352,23 @@ function M:send(text)
   end
   local clean = (text or ""):gsub("\n$", "")
   if clean == "" then
-    Util.exec({ "hc", "keys", self.hc_terminal_id, "enter" })
     return
   end
-  Util.exec({ "hc", "send", "--", self.hc_terminal_id, clean })
+  if not M.can_paste() then
+    Util.error("Sending to herdr-core needs `herdr-app`, `wl-copy` and `wl-paste` on Wayland")
+    return
+  end
+  if not self:paste(clean) then
+    Util.error(("Could not paste into herdr-core terminal `%s`"):format(self.hc_terminal_id))
+  end
 end
 
---- `hc send` already pastes and presses Enter.
-function M:submit() end
+function M:submit()
+  if not self.hc_terminal_id then
+    return
+  end
+  Util.exec({ "hc", "keys", self.hc_terminal_id, "enter" })
+end
 
 --- Capture screen and scrollback from the herdr-core terminal.
 ---@return string?
